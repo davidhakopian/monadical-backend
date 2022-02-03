@@ -83,33 +83,47 @@ async def listen(websocket, path):
             startGameMessage = {
                 "type": "startGame"
             }
-            await currentGame.player1.send(json.dumps(startGameMessage))
-            await currentGame.player2.send(json.dumps(startGameMessage))
+            ##await currentGame.player1.send(json.dumps(startGameMessage))
+            ##await currentGame.player2.send(json.dumps(startGameMessage))
     
     
         async for message in websocket:
             print("Recieved message from player: " + str(currentPlayer))
             jsonData = json.loads(message)
             
-            move = {
-                "type": "move",
-                "x": jsonData["x"],
-                "y": jsonData["y"]
-            }
-            
-            currentGame.turnsPlayed = currentGame.turnsPlayed + 1
-            
-            sql = "INSERT INTO moves (gameId, turnNumber, x, y) VALUES (%s, %s, %s, %s)"
-            dbcursor.execute(sql, (currentGame.id, currentGame.turnsPlayed, jsonData["x"], jsonData["y"]))
-            DB.commit()
-            
-            if(currentPlayer == 1):
-                await currentGame.player2.send(json.dumps(move))
-            else:
-                await currentGame.player1.send(json.dumps(move))
+            if jsonData["type"] == "url" and jsonData["value"] != "/":
+                sql = "SELECT * from games"
+                dbcursor.execute(sql)
+                result = dbcursor.fetchall()
+                gameIdList = list(map(getGameId, result))
+                sendList = {
+                    "type": "gameList",
+                    "list": gameIdList,
+                }
+                await websocket.send(json.dumps(sendList))
+            else: 
+                move = {
+                    "type": "move",
+                    "x": jsonData["x"],
+                    "y": jsonData["y"]
+                }
+                
+                currentGame.turnsPlayed = currentGame.turnsPlayed + 1
+                
+                sql = "INSERT INTO moves (gameId, turnNumber, x, y) VALUES (%s, %s, %s, %s)"
+                dbcursor.execute(sql, (currentGame.id, currentGame.turnsPlayed, jsonData["x"], jsonData["y"]))
+                DB.commit()
+                
+                ##if(currentPlayer == 1):
+                    ##await currentGame.player2.send(json.dumps(move))
+                #else:
+                    #await currentGame.player1.send(json.dumps(move))
             
     except websockets.exceptions.ConnectionClosed as e:
         print("A player just disconnected, " + str(e))
+
+def getGameId(gameTuple): 
+    return gameTuple[0]
 
 start_server = websockets.serve(listen, 'localhost', PORT)
 
